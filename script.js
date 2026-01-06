@@ -1,12 +1,14 @@
 const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJCQ0NSLVNEREUiLCJzdWIiOiJKLXJvbGRAaG90bWFpbC5jb20iLCJhdWQiOiJTRERFLVNpdGlvRXh0ZXJubyIsImV4cCI6MjUzNDAyMzAwODAwLCJuYmYiOjE3NjUxNzE0NjksImlhdCI6MTc2NTE3MTQ2OSwianRpIjoiNTlkMGIyNjUtN2QxYi00NDVkLWEyNTQtYjE0YTFhZWUxNjU3IiwiZW1haWwiOiJKLXJvbGRAaG90bWFpbC5jb20ifQ.WD-2f97SIu-N8GhnAz5tBio8jVuH3NyrJp_70L58eas';
 
-async function obtenerTipoCambio(id, fechaISO) {
+async function obtenerIndicador(id, fechaISO) {
+    // Formato manual pág 14: yyyy/mm/dd
     const fechaBccr = fechaISO.replace(/-/g, "/");
-    // URL de respaldo sugerida en la pág 21 del manual
-    const urlOriginal = `https://azapp-sdde-prod-002.azurewebsites.net/api/Bccr.GE.SDDE.Publico.Indicadores.API/indicadoresEconomicos/${id}/series?fechaInicio=${fechaBccr}&fechaFin=${fechaBccr}&idioma=es`;
     
-    // El proxy es VITAL para que funcione en GitHub
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(urlOriginal)}`;
+    // URL de Azure (Página 21 del manual) - Evita el error ERR_NAME_NOT_RESOLVED
+    const urlBccr = `https://azapp-sdde-prod-002.azurewebsites.net/api/Bccr.GE.SDDE.Publico.Indicadores.API/indicadoresEconomicos/${id}/series?fechaInicio=${fechaBccr}&fechaFin=${fechaBccr}&idioma=es`;
+
+    // Proxy para saltar el bloqueo de CORS en GitHub
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(urlBccr)}`;
 
     try {
         const respuesta = await fetch(proxyUrl, {
@@ -20,13 +22,15 @@ async function obtenerTipoCambio(id, fechaISO) {
         if (!respuesta.ok) return null;
 
         const data = await respuesta.json();
-        // Estructura según Anexo B del manual
+        
+        // Estructura según Anexo B (Pág 20 del manual)
         if (data && data.datos && data.datos.length > 0) {
             return parseFloat(data.datos[0].valor).toFixed(2);
         }
         return null;
+
     } catch (error) {
-        console.error("Error en indicador " + id, error);
+        console.error("Error en " + id + ":", error);
         return null;
     }
 }
@@ -34,11 +38,11 @@ async function obtenerTipoCambio(id, fechaISO) {
 async function actualizarDatos() {
     const status = document.getElementById('status');
     const fechaInput = document.getElementById('fechaBusqueda').value;
-    
-    status.innerText = "Conectando con el BCCR...";
 
-    const compra = await obtenerTipoCambio(317, fechaInput);
-    const venta = await obtenerTipoCambio(318, fechaInput);
+    status.innerText = "Sincronizando con BCCR...";
+
+    const compra = await obtenerIndicador(317, fechaInput);
+    const venta = await obtenerIndicador(318, fechaInput);
 
     if (compra && venta) {
         document.getElementById('compra').innerText = compra;
@@ -51,10 +55,11 @@ async function actualizarDatos() {
     }
 }
 
+// Configuración al cargar
 window.onload = () => {
-    // Hoy es 5 de enero, pero para asegurar datos cargamos el cierre del 2 de enero (Viernes)
-    // ya que el API tarda en actualizar los fines de semana.
-    const fechaDefecto = "2026-01-02"; 
+    // Hoy es Lunes 5 de Enero. Como el BCCR puede tardar en actualizar, 
+    // ponemos el cierre del viernes 2 de Enero por defecto.
+    const fechaDefecto = "2026-01-02";
     document.getElementById('fechaBusqueda').value = fechaDefecto;
     actualizarDatos();
 };
